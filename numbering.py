@@ -1,7 +1,7 @@
 import os
 
 # folder where images are stored
-folder_path = r"dataset/training/Subconjunctival Hemorrage"   # change this
+folder_path = r"iLab\dataset\Subconjunctival Hemorrage"   # change this
 
 # new name pattern 
 new_name = "image"  # files will become image_1.jpg, image_2.png etc
@@ -23,7 +23,7 @@ for file in os.listdir(folder_path):
     
     # check if it is an image
     if ext.lower() in extensions:
-        new_file_name = f"im_{count}{ext}"
+        new_file_name = f"image_{count}{ext}"
         new_file_path = os.path.join(folder_path, new_file_name)
         
         os.rename(file_path, new_file_path)
