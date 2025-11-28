@@ -1,0 +1,26 @@
+# virtual environment
+.venv/
+venv/
+env/
+
+# python cache
+__pycache__/
+*.pyc
+
+# dataset
+dataset/
+*/dataset/
+*/data/
+
+# model checkpoints (optional)
+*.h5
+*.ckpt
+*.pb
+
+# logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
