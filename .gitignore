@@ -1,0 +1,41 @@
+# Build and dependencies
+.dart_tool/
+build/
+.packages
+pubspec.lock
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.egg
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# ML Models (large files - optional to track)
+*.h5
+*.keras
+*.pt
+*.pth
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# OS specific
+Thumbs.db
+.DS_Store
