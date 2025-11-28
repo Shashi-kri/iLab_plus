@@ -37,6 +37,7 @@ class AppTheme {
   static const Color secondaryLightBlue = Color(0xFFD5E3FF);
   static const Color accentBlue = Color(0xFF8BA8FD);
   static const Color pastelGreen = Color(0xFFD5F5F0);
+  static const Color accentGreen = Color(0xFF10B981);
 
   // Gradient Decoration
   static BoxDecoration get gradientBackground {
@@ -59,7 +60,8 @@ class AppTheme {
   static const Color cardBackground = Colors.white;
   static const Color successGreen = Color(0xFF10B981);
   static const Color warningOrange = Color(0xFFF59E0B);
-  static const Color errorRed = Color(0xFFEF4444);  static ThemeData get lightTheme {
+  static const Color errorRed = Color(0xFFEF4444);
+  static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       fontFamily: 'Urbanist',
@@ -228,7 +230,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: Color(0xFFE0E0E0)),

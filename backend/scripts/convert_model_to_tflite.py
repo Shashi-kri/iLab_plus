@@ -21,9 +21,7 @@ CLASS_NAMES = [
     'Eyelid',
     'Normal Eye',
     'cataract',
-    'jaundice',
-    'Pterygium',
-    'Subconjunctival Hemorrage'
+    'Pterygium'
 ]
 
 def convert_model():

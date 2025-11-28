@@ -25,9 +25,7 @@ CLASS_NAMES = [
     'Eyelid',
     'Normal Eye',
     'cataract',
-    'jaundice',
-    'Pterygium',
-    'Subconjunctival Hemorrage'
+    'Pterygium'
 ]
 
 # Global model variable

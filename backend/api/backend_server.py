@@ -11,20 +11,22 @@ import io
 import base64
 import os
 
-# Import keras directly to avoid TensorFlow import issues
+# Import TensorFlow and Keras
 try:
-    from keras.models import load_model
-    print("✅ Using Keras directly")
-except ImportError:
     import tensorflow as tf
     from tensorflow.keras.models import load_model
     print("✅ Using TensorFlow Keras")
+except ImportError as e:
+    print(f"❌ TensorFlow not available: {e}")
+    raise
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 
 # Configuration - try best_eye_model.keras first
-MODEL_PATH = r"c:\ilab+\flutter-1\Eye-Disease-Prediction\best_eye_model.keras"
+import pathlib
+BASE_DIR = pathlib.Path(__file__).parent.parent.parent
+MODEL_PATH = BASE_DIR / "ml_models" / "Eye-Disease-Prediction" / "best_eye_model.keras"
 
 # Class names matching the trained model
 CLASS_NAMES = [
@@ -32,9 +34,7 @@ CLASS_NAMES = [
     'Eyelid',
     'Normal Eye',
     'cataract',
-    'jaundice',
-    'Pterygium',
-    'Subconjunctival Hemorrage'
+    'Pterygium'
 ]
 
 # Map to display names
@@ -43,9 +43,7 @@ DISPLAY_NAMES = {
     'Eyelid': 'Eyelid',
     'Normal Eye': 'Normal Eye',
     'cataract': 'cataract',
-    'jaundice': 'jaundice',
-    'Pterygium': 'Pterygium',
-    'Subconjunctival Hemorrage': 'Subconjunctival Hemorrage'
+    'Pterygium': 'Pterygium'
 }
 
 # Global model variable
@@ -57,8 +55,8 @@ def load_keras_model():
 
     # Try multiple model files
     model_paths = [
-        r"c:\ilab+\flutter-1\Eye-Disease-Prediction\best_eye_model.keras",
-        r"c:\ilab+\flutter-1\Eye-Disease-Prediction\eye_disease_classifier.keras"
+        BASE_DIR / "ml_models" / "Eye-Disease-Prediction" / "best_eye_model.keras",
+        BASE_DIR / "ml_models" / "Eye-Disease-Prediction" / "eye_disease_classifier.keras"
     ]
 
     for path in model_paths:
@@ -123,10 +121,8 @@ def predict():
             'Normal Eye': 0.75,
             'Conjunctivitis': 0.12,
             'cataract': 0.08,
-            'Pterygium': 0.03,
-            'Eyelid': 0.01,
-            'Subconjunctival Hemorrage': 0.01,
-            'jaundice': 0.00
+            'Pterygium': 0.04,
+            'Eyelid': 0.01
         }
         return jsonify({
             'success': True,

@@ -7,7 +7,7 @@ from tensorflow.keras.applications.efficientnet import preprocess_input
 model = tf.keras.models.load_model(r"D:\iLAB+\best_eye_model.keras")
 
 # Class names (must match train_gen.class_indices order)
-class_names = ['Conjectivites', 'Eyelid', 'Normal Eye', 'cataract', 'jaundice', 'Pterygium', 'Subconjunctival Hemorrage']
+class_names = ['Conjectivites', 'Eyelid', 'Normal Eye', 'cataract', 'Pterygium']
 
 # Path to image you want to test
 img_path = r"iLab\dataset\train\jaundice\image_3.jpg"  # <- change as needed

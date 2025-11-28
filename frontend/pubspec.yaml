@@ -1,10 +1,10 @@
 name: ilab_plus_app
 description: "iLab+ Eye Health - Medical eye health app with AI diagnostics"
-publish_to: 'none'
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -12,6 +12,21 @@ dependencies:
 
   # UI and Icons
   cupertino_icons: ^1.0.2
+
+  # HTTP client for API calls
+  http: ^1.1.0
+
+  # Image picker for camera/gallery
+  image_picker: ^1.0.4
+
+  # Camera access
+  camera: ^0.10.5+5
+
+  # Permissions handling
+  permission_handler: ^11.0.1
+
+  # Path provider for cache
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import 'disease_detection_screen.dart';
+import 'ai_scan_screen.dart';
 import 'vision_test_screen.dart';
 import 'test_suite_screen.dart';
 import 'chatbot_screen.dart';
@@ -13,7 +13,8 @@ class NewDashboardScreen extends StatefulWidget {
   State<NewDashboardScreen> createState() => _NewDashboardScreenState();
 }
 
-class _NewDashboardScreenState extends State<NewDashboardScreen> with TickerProviderStateMixin {
+class _NewDashboardScreenState extends State<NewDashboardScreen>
+    with TickerProviderStateMixin {
   int _currentTipIndex = 0;
   int _selectedTab = 0;
   final PageController _pageController = PageController();
@@ -22,10 +23,7 @@ class _NewDashboardScreenState extends State<NewDashboardScreen> with TickerProv
   late AnimationController _floatingController3;
 
   final List<Map<String, String>> _eyeTips = [
-    {
-      "text": "Follow the 20-20-20 rule",
-      "image": "assets/images/clock.jpg"
-    },
+    {"text": "Follow the 20-20-20 rule", "image": "assets/images/clock.jpg"},
     {
       "text": "Maintain proper screen distance",
       "image": "assets/images/distance.jpg"
@@ -34,14 +32,8 @@ class _NewDashboardScreenState extends State<NewDashboardScreen> with TickerProv
       "text": "Stay hydrated for healthy eyes",
       "image": "assets/images/water.jpg"
     },
-    {
-      "text": "Wear sunglasses outdoors",
-      "image": "assets/images/beach.jpg"
-    },
-    {
-      "text": "Get adequate sleep daily",
-      "image": "assets/images/moon.jpg"
-    },
+    {"text": "Wear sunglasses outdoors", "image": "assets/images/beach.jpg"},
+    {"text": "Get adequate sleep daily", "image": "assets/images/moon.jpg"},
   ];
 
   @override
@@ -78,7 +70,9 @@ class _NewDashboardScreenState extends State<NewDashboardScreen> with TickerProv
       body: Container(
         decoration: AppTheme.gradientBackground,
         child: SafeArea(
-          child: _selectedTab == 0 ? _buildMainDashboard() : const MyReportsScreen(),
+          child: _selectedTab == 0
+              ? _buildMainDashboard()
+              : const MyReportsScreen(),
         ),
       ),
       bottomNavigationBar: _buildBottomNav(),
@@ -111,57 +105,59 @@ class _NewDashboardScreenState extends State<NewDashboardScreen> with TickerProv
             ),
             const SizedBox(height: 16),
 
-                // Feature Cards
-                _buildFeatureCard(
-                  context: context,
-                  icon: Icons.center_focus_strong,
-                  iconColor: AppTheme.iconBgTeal,
-                  title: 'AI Eye Scan',
-                  description: 'Scan your eyes for signs of common conditions',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const DiseaseDetectionScreen()),
-                  ),
-                ),
-                const SizedBox(height: 16),
+            // Feature Cards
+            _buildFeatureCard(
+              context: context,
+              icon: Icons.center_focus_strong,
+              iconColor: AppTheme.iconBgTeal,
+              title: 'AI Eye Scan',
+              description: 'Scan your eyes for signs of common conditions',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AIScanScreen()),
+              ),
+            ),
+            const SizedBox(height: 16),
 
-                _buildFeatureCard(
-                  context: context,
-                  icon: Icons.remove_red_eye_outlined,
-                  iconColor: AppTheme.iconBgBlue,
-                  title: 'Vision Test',
-                  description: 'Hands-free voice-controlled vision assessment',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const VisionTestScreen()),
-                  ),
-                ),
-                const SizedBox(height: 16),
+            _buildFeatureCard(
+              context: context,
+              icon: Icons.remove_red_eye_outlined,
+              iconColor: AppTheme.iconBgBlue,
+              title: 'Vision Test',
+              description: 'Hands-free voice-controlled vision assessment',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const VisionTestScreen()),
+              ),
+            ),
+            const SizedBox(height: 16),
 
-                _buildFeatureCard(
-                  context: context,
-                  icon: Icons.science_outlined,
-                  iconColor: AppTheme.iconBgCyan,
-                  title: 'Test Suite',
-                  description: 'Comprehensive at-home eye health tests',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const TestSuiteScreen()),
-                  ),
-                ),
-                const SizedBox(height: 16),
+            _buildFeatureCard(
+              context: context,
+              icon: Icons.science_outlined,
+              iconColor: AppTheme.iconBgCyan,
+              title: 'Test Suite',
+              description: 'Comprehensive at-home eye health tests',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const TestSuiteScreen()),
+              ),
+            ),
+            const SizedBox(height: 16),
 
-                _buildFeatureCard(
-                  context: context,
-                  icon: Icons.chat_bubble_outline,
-                  iconColor: AppTheme.iconBgGreen,
-                  title: 'AI Assistant',
-                  description: 'Get instant help with symptoms and questions',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ChatbotScreen()),
-                  ),
-                ),
+            _buildFeatureCard(
+              context: context,
+              icon: Icons.chat_bubble_outline,
+              iconColor: AppTheme.iconBgGreen,
+              title: 'AI Assistant',
+              description: 'Get instant help with symptoms and questions',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChatbotScreen()),
+              ),
+            ),
             const SizedBox(height: 24),
           ],
         ),
@@ -224,7 +220,9 @@ class _NewDashboardScreenState extends State<NewDashboardScreen> with TickerProv
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.peachColor.withOpacity(0.15) : Colors.transparent,
+          color: isSelected
+              ? AppTheme.peachColor.withOpacity(0.15)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -654,10 +652,14 @@ class _NewDashboardScreenState extends State<NewDashboardScreen> with TickerProv
 
                   // Get Started Button
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 10),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [iconColor.withOpacity(0.2), iconColor.withOpacity(0.1)],
+                        colors: [
+                          iconColor.withOpacity(0.2),
+                          iconColor.withOpacity(0.1)
+                        ],
                       ),
                       borderRadius: BorderRadius.circular(24),
                     ),

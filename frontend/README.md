@@ -3,18 +3,21 @@
 Essential files to run the Flutter application:
 
 ## Platform-Specific Files
+
 - `android/` - Android native configuration
-- `ios/` - iOS native configuration  
+- `ios/` - iOS native configuration
 - `web/` - Web platform support
 - `windows/` - Windows desktop support
 - `linux/` - Linux desktop support
 - `macos/` - macOS desktop support
 
 ## Assets
+
 - `assets/` - Images, fonts, and other resources
 - `assets/images/color_blindness/` - Ishihara test plates
 
 ## Configuration
+
 - `pubspec.yaml` - Flutter dependencies
 - `analysis_options.yaml` - Dart linter rules
 - `.metadata` - Flutter project metadata
@@ -36,6 +39,7 @@ flutter build windows    # Windows
 ```
 
 ## Required Flutter SDK
+
 - Flutter 3.x+
 - Dart 3.x+
 

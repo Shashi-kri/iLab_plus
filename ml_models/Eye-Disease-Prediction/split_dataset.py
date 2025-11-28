@@ -4,7 +4,7 @@ import random
 
 # 🔧 CONFIG
 DATASET_DIR = r"iLab\dataset"   # change if needed
-CLASS_NAMES = ["cataract", "Conjectivites", "Eyelid", "Normal Eye", "jaundice", "Pterygium", "Subconjunctival Hemorrage"]  # folder names
+CLASS_NAMES = ["cataract", "Conjectivites", "Eyelid", "Normal Eye", "Pterygium"]  # folder names
 TRAIN_SPLIT = 0.7
 VAL_SPLIT = 0.15   # test will be 1 - train - val
 
