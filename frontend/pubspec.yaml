@@ -1,0 +1,31 @@
+name: ilab_plus_app
+description: "iLab+ Eye Health - Medical eye health app with AI diagnostics"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI and Icons
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Assets
+  assets:
+    - assets/images/
+    - assets/images/color_blindness/
+
+  # Note: Using system default fonts for now
+  # To add custom Poppins/Roboto fonts, download from Google Fonts
+  # and uncomment the fonts section below with the font files in a fonts/ directory
