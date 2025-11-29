@@ -1,6 +1,6 @@
 """
 iLab+ Eye Disease Detection API Server
-Provides real-time eye disease prediction using the trained model
+Provides real-time eye disease prediction using multiple trained models
 """
 
 from flask import Flask, request, jsonify
@@ -10,125 +10,395 @@ from PIL import Image
 import io
 import base64
 import os
+import pathlib
 
 # Import TensorFlow and Keras
 try:
     import tensorflow as tf
     from tensorflow.keras.models import load_model
+    from tensorflow.keras.applications.efficientnet import preprocess_input
     print("✅ Using TensorFlow Keras")
-    TENSORFLOW_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  TensorFlow not available: {e}")
-    print("   Vision test endpoint will still work")
-    TENSORFLOW_AVAILABLE = False
-    tf = None
-    load_model = None
+    print(f"❌ TensorFlow not available: {e}")
+    raise
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 
-# Configuration - try best_eye_model.keras first
-import pathlib
+# Configuration
 BASE_DIR = pathlib.Path(__file__).parent.parent.parent
-MODEL_PATH = BASE_DIR / "ml_models" / "Eye-Disease-Prediction" / "best_eye_model.keras"
+MODELS_DIR = BASE_DIR / "machine_learning" / "trained_models"
 
-# Class names matching the trained model
-CLASS_NAMES = [
-    'Conjectivites',
-    'Eyelid',
-    'Normal Eye',
-    'cataract',
-    'Pterygium'
-]
+# Model configuration - each model is a binary classifier
+MODEL_CONFIGS = {
+    'cataract': {
+        'path': MODELS_DIR / "Cataract_Classifier.keras",
+        'classes': ['Normal Eye', 'Cataract'],
+        'display_name': 'Cataract'
+    },
+    'conjectivites': {
+        'path': MODELS_DIR / "Conjectivites_Classifier.keras",
+        'classes': ['Conjectivites', 'Normal Eye'],
+        'display_name': 'Conjunctivitis'
+    },
+    'eyelid': {
+        'path': MODELS_DIR / "Eyelid_Classifier.keras",
+        'classes': ['Eyelid', 'Normal Eye'],
+        'display_name': 'Eyelid'
+    },
+    'pterygium': {
+        'path': MODELS_DIR / "Pterygium_Classifier.keras",
+        'classes': ['Normal Eye', 'Pterygium'],
+        'display_name': 'Pterygium'
+    }
+}
 
-# Map to display names
+# All possible classes
+ALL_CLASSES = ['Normal Eye', 'Cataract', 'Conjunctivitis', 'Eyelid', 'Pterygium']
+
+# Display name mapping
 DISPLAY_NAMES = {
-    'Conjectivites': 'Conjunctivitis',
-    'Eyelid': 'Eyelid',
     'Normal Eye': 'Normal Eye',
-    'cataract': 'cataract',
+    'Cataract': 'Cataract',
+    'Conjectivites': 'Conjunctivitis',
+    'Conjunctivitis': 'Conjunctivitis',
+    'Eyelid': 'Eyelid',
     'Pterygium': 'Pterygium'
 }
 
-# Global model variable
-model = None
+# Global models dictionary
+models = {}
 
-def load_keras_model():
-    """Load the Keras model - handles corrupted model files"""
-    global model
+def load_all_models():
+    """Load all disease detection models"""
+    global models
+    models = {}
+    loaded_count = 0
     
-    if not TENSORFLOW_AVAILABLE:
-        print("⚠️  TensorFlow not available - skipping model loading")
-        return False
-
-    # Try multiple model files
-    model_paths = [
-        BASE_DIR / "ml_models" / "Eye-Disease-Prediction" / "best_eye_model.keras",
-        BASE_DIR / "ml_models" / "Eye-Disease-Prediction" / "eye_disease_classifier.keras"
-    ]
-
-    for path in model_paths:
-        if not os.path.exists(path):
+    print("\n" + "=" * 70)
+    print("📦 Loading Disease Detection Models")
+    print("=" * 70)
+    
+    for model_name, config in MODEL_CONFIGS.items():
+        model_path = config['path']
+        
+        if not os.path.exists(model_path):
+            print(f"⚠️  Model not found: {model_path}")
             continue
-
+        
         try:
-            print(f"📦 Trying to load model from: {path}")
-
-            # Method 1: Try normal loading
+            print(f"\n📦 Loading {model_name} model from: {model_path}")
+            
+            # Try loading the model
             try:
-                model = load_model(path, compile=False)
-                model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-                print("✅ Model loaded successfully (compile=False)!")
+                model = load_model(model_path, compile=False)
+                # Compile with appropriate loss function for binary classification
+                model.compile(
+                    optimizer='adam',
+                    loss='binary_crossentropy',
+                    metrics=['accuracy']
+                )
+                models[model_name] = {
+                    'model': model,
+                    'classes': config['classes'],
+                    'display_name': config['display_name']
+                }
+                loaded_count += 1
+                print(f"✅ {config['display_name']} model loaded successfully!")
                 print(f"   Input shape: {model.input_shape}")
                 print(f"   Output shape: {model.output_shape}")
-                return True
-            except Exception as e1:
-                print(f"   Method 1 failed: {str(e1)[:100]}")
-
-            # Method 2: Try with safe_mode
-            try:
-                model = load_model(path, compile=False, safe_mode=False)
-                model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-                print("✅ Model loaded successfully (safe_mode=False)!")
-                print(f"   Input shape: {model.input_shape}")
-                print(f"   Output shape: {model.output_shape}")
-                return True
-            except Exception as e2:
-                print(f"   Method 2 failed: {str(e2)[:100]}")
-
+                print(f"   Classes: {config['classes']}")
+            except Exception as e:
+                print(f"❌ Failed to load {model_name} model: {str(e)[:200]}")
+                continue
+                
         except Exception as e:
-            print(f"   ❌ All methods failed for {path}")
+            print(f"❌ Error loading {model_name}: {str(e)[:200]}")
             continue
+    
+    print("\n" + "=" * 70)
+    print(f"✅ Loaded {loaded_count}/{len(MODEL_CONFIGS)} models")
+    print("=" * 70)
+    
+    return loaded_count > 0
 
-    print(f"❌ Could not load any model file")
-    print(f"   The model files appear to be corrupted or incompatible")
-    print(f"   Using DEMO MODE for now - returning mock predictions")
-    return False
+def preprocess_image(img):
+    """
+    Preprocess image for EfficientNet models
+    Resize to 224x224 and apply EfficientNet preprocessing
+    """
+    # Resize to 224x224
+    img = img.resize((224, 224))
+    img_array = np.array(img).astype(np.float32)
+    
+    # Expand dimensions for batch
+    img_array = np.expand_dims(img_array, axis=0)
+    
+    # Apply EfficientNet preprocessing (normalizes to [-1, 1] range)
+    img_array = preprocess_input(img_array)
+    
+    return img_array
+
+def predict_with_single_model(img_array, disease_name):
+    """
+    Run prediction on a single disease model
+    Returns: Dictionary with prediction result (Normal Eye or Disease)
+    """
+    # Map disease name to model key
+    disease_lower = disease_name.lower()
+    model_key_map = {
+        'cataract': 'cataract',
+        'conjunctivitis': 'conjectivites',
+        'conjectivites': 'conjectivites',
+        'eyelid': 'eyelid',
+        'pterygium': 'pterygium'
+    }
+    
+    model_key = model_key_map.get(disease_lower)
+    if not model_key or model_key not in models:
+        return None
+    
+    model_info = models[model_key]
+    model = model_info['model']
+    classes = model_info['classes']
+    display_name = model_info['display_name']
+    
+    try:
+        # Get prediction
+        prediction = model.predict(img_array, verbose=0)[0]
+        
+        # Handle binary classification output
+        if len(prediction.shape) == 0:
+            prob_disease = float(prediction)
+            prob_normal = 1.0 - prob_disease
+        else:
+            if len(prediction) >= 2:
+                normal_idx = classes.index('Normal Eye')
+                disease_idx = 1 - normal_idx
+                prob_normal = float(prediction[normal_idx])
+                prob_disease = float(prediction[disease_idx])
+            else:
+                prob_disease = float(prediction[0])
+                prob_normal = 1.0 - prob_disease
+        
+        # Determine result
+        if prob_disease > 0.5:
+            predicted_class = display_name
+            confidence = prob_disease
+            status = 'Positive'
+        else:
+            predicted_class = 'Normal Eye'
+            confidence = prob_normal
+            status = 'Normal'
+        
+        print(f"   Primary Check ({display_name}): {status} (Confidence: {confidence:.3f})")
+        
+        return {
+            'predicted_class': predicted_class,
+            'status': status,
+            'confidence': confidence,
+            'disease_prob': prob_disease,
+            'normal_prob': prob_normal,
+            'disease_name': display_name
+        }
+    except Exception as e:
+        print(f"❌ Error predicting with {model_key}: {str(e)[:200]}")
+        return None
+
+def predict_with_remaining_models(img_array, exclude_disease):
+    """
+    Run prediction on all models except the excluded disease
+    Returns: Dictionary with predictions for remaining diseases
+    """
+    # Map disease name to model key
+    disease_lower = exclude_disease.lower()
+    model_key_map = {
+        'cataract': 'cataract',
+        'conjunctivitis': 'conjectivites',
+        'conjectivites': 'conjectivites',
+        'eyelid': 'eyelid',
+        'pterygium': 'pterygium'
+    }
+    
+    exclude_model_key = model_key_map.get(disease_lower)
+    remaining_probabilities = {}
+    
+    # Run inference on remaining models
+    for model_name, model_info in models.items():
+        # Skip the excluded disease model
+        if exclude_model_key and model_name == exclude_model_key:
+            continue
+        
+        try:
+            model = model_info['model']
+            classes = model_info['classes']
+            display_name = model_info['display_name']
+            
+            # Get prediction
+            prediction = model.predict(img_array, verbose=0)[0]
+            
+            # Handle binary classification output
+            if len(prediction.shape) == 0:
+                prob_disease = float(prediction)
+                prob_normal = 1.0 - prob_disease
+            else:
+                if len(prediction) >= 2:
+                    normal_idx = classes.index('Normal Eye')
+                    disease_idx = 1 - normal_idx
+                    prob_normal = float(prediction[normal_idx])
+                    prob_disease = float(prediction[disease_idx])
+                else:
+                    prob_disease = float(prediction[0])
+                    prob_normal = 1.0 - prob_disease
+            
+            # Store disease probability (exclude Normal Eye from remaining predictions)
+            if display_name == 'Conjunctivitis':
+                remaining_probabilities['Conjunctivitis'] = prob_disease
+            else:
+                remaining_probabilities[display_name] = prob_disease
+            
+            print(f"   {display_name}: {prob_disease:.3f}")
+            
+        except Exception as e:
+            print(f"❌ Error predicting with {model_name}: {str(e)[:200]}")
+            continue
+    
+    # Sort by probability
+    sorted_probs = dict(sorted(
+        remaining_probabilities.items(),
+        key=lambda x: x[1],
+        reverse=True
+    ))
+    
+    return sorted_probs
+
+def predict_with_all_models(img_array):
+    """
+    Run prediction on all loaded models and combine results
+    Returns: Dictionary with combined predictions
+    """
+    results = {}
+    disease_predictions = {}
+    
+    # Initialize probabilities for all classes
+    probabilities = {cls: 0.0 for cls in ALL_CLASSES}
+    
+    # Run inference on each model
+    for model_name, model_info in models.items():
+        try:
+            model = model_info['model']
+            classes = model_info['classes']  # Class order for this model
+            display_name = model_info['display_name']
+            
+            # Get prediction
+            prediction = model.predict(img_array, verbose=0)[0]
+            
+            # Handle binary classification output
+            # Each model outputs 2 probabilities via softmax
+            if len(prediction.shape) == 0:
+                # Single value output (sigmoid) - unlikely but handle it
+                prob_disease = float(prediction)
+                prob_normal = 1.0 - prob_disease
+            else:
+                # Two-value output (softmax) - standard case
+                if len(prediction) >= 2:
+                    # Get index of 'Normal Eye' in the classes list
+                    normal_idx = classes.index('Normal Eye')
+                    disease_idx = 1 - normal_idx
+                    
+                    prob_normal = float(prediction[normal_idx])
+                    prob_disease = float(prediction[disease_idx])
+                else:
+                    # Fallback - single output
+                    prob_disease = float(prediction[0])
+                    prob_normal = 1.0 - prob_disease
+            
+            # Store results
+            results[model_name] = {
+                'disease_prob': prob_disease,
+                'normal_prob': prob_normal,
+                'predicted': display_name if prob_disease > 0.5 else 'Normal Eye'
+            }
+            
+            # Update probabilities - use maximum across all models
+            probabilities['Normal Eye'] = max(probabilities['Normal Eye'], prob_normal)
+            
+            # Map disease probability to correct class name
+            if display_name == 'Conjunctivitis':
+                probabilities['Conjunctivitis'] = max(probabilities.get('Conjunctivitis', 0.0), prob_disease)
+            else:
+                probabilities[display_name] = max(probabilities.get(display_name, 0.0), prob_disease)
+            
+            # Track disease predictions (only if confidence > 0.5)
+            if prob_disease > 0.5:
+                disease_predictions[display_name] = prob_disease
+            
+            print(f"   {display_name}: Disease={prob_disease:.3f}, Normal={prob_normal:.3f}")
+            
+        except Exception as e:
+            print(f"❌ Error predicting with {model_name}: {str(e)[:200]}")
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    # Determine final prediction
+    if disease_predictions:
+        # If any disease is detected, use the one with highest probability
+        predicted_disease = max(disease_predictions.items(), key=lambda x: x[1])
+        predicted_class = predicted_disease[0]
+        confidence = predicted_disease[1]
+    else:
+        # All models predict normal
+        predicted_class = 'Normal Eye'
+        confidence = probabilities['Normal Eye']
+    
+    # Normalize probabilities to sum to 1 (softmax-like normalization)
+    total = sum(probabilities.values())
+    if total > 0:
+        probabilities = {k: v / total for k, v in probabilities.items()}
+    
+    return {
+        'predicted_class': predicted_class,
+        'confidence': confidence,
+        'probabilities': probabilities,
+        'model_results': results
+    }
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'model_loaded': model is not None,
-        'classes': CLASS_NAMES,
-        'version': '1.0.0'
+        'models_loaded': len(models),
+        'total_models': len(MODEL_CONFIGS),
+        'classes': ALL_CLASSES,
+        'version': '2.0.0'
     })
 
 @app.route('/predict', methods=['POST'])
 def predict():
     """
     Prediction endpoint
-    Accepts: multipart/form-data with 'image' file
-    Returns: JSON with predictions
+    Accepts: 
+        - multipart/form-data with 'image' file
+        - JSON with 'image_base64' and optional 'disease' parameter
+        - Query parameter 'disease' to specify which disease to check
+    
+    If 'disease' is specified:
+        - Checks only that disease model first
+        - Returns Normal/Positive status for that disease
+        - Shows remaining disease predictions below (excluding the checked disease)
+    
+    If 'disease' is not specified:
+        - Runs all models and returns combined results
     """
-    # DEMO MODE: If model not loaded, return demo predictions
-    if model is None:
-        print("⚠️  DEMO MODE: Returning mock predictions")
+    # DEMO MODE: If no models loaded, return demo predictions
+    if not models:
+        print("⚠️  DEMO MODE: No models loaded, returning mock predictions")
         probabilities = {
             'Normal Eye': 0.75,
             'Conjunctivitis': 0.12,
-            'cataract': 0.08,
+            'Cataract': 0.08,
             'Pterygium': 0.04,
             'Eyelid': 0.01
         }
@@ -139,14 +409,23 @@ def predict():
             'probabilities': probabilities,
             'all_probabilities': probabilities,
             'demo_mode': True,
-            'message': 'Model not loaded - showing demo prediction',
+            'message': 'Models not loaded - showing demo prediction',
             'model_info': {
                 'input_size': '224x224',
-                'classes': len(CLASS_NAMES)
+                'classes': len(ALL_CLASSES)
             }
         })
 
     try:
+        # Get disease parameter from query string, form data, or JSON
+        disease_to_check = None
+        if request.args.get('disease'):
+            disease_to_check = request.args.get('disease')
+        elif request.form.get('disease'):
+            disease_to_check = request.form.get('disease')
+        elif request.is_json and 'disease' in request.json:
+            disease_to_check = request.json.get('disease')
+        
         # Get image from request
         img = None
 
@@ -172,56 +451,79 @@ def predict():
         original_size = img.size
         print(f"Original size: {original_size}")
 
-        # Resize to 224x224 (model input size)
-        img = img.resize((224, 224))
-        img_array = np.array(img).astype(np.float32)
-
-        # Normalize: rescale to [0, 1] (matching training preprocessing)
-        img_array = img_array / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
-
+        # Preprocess for EfficientNet
+        img_array = preprocess_image(img)
+        
         print(f"Preprocessed shape: {img_array.shape}")
         print(f"Value range: [{img_array.min():.3f}, {img_array.max():.3f}]")
 
-        # Run prediction
-        print("🔮 Running inference...")
-        predictions = model.predict(img_array, verbose=0)[0]
+        # If disease is specified, check only that disease first
+        if disease_to_check:
+            print(f"🔍 Checking specific disease: {disease_to_check}")
+            
+            # Run primary disease check
+            primary_result = predict_with_single_model(img_array, disease_to_check)
+            
+            if not primary_result:
+                return jsonify({
+                    'error': 'Invalid disease name',
+                    'message': f'Disease "{disease_to_check}" not found. Available: {", ".join(ALL_CLASSES[1:])}'
+                }), 400
+            
+            # Run remaining models (excluding the checked disease)
+            print("🔮 Running inference on remaining models...")
+            remaining_predictions = predict_with_remaining_models(img_array, disease_to_check)
+            
+            print(f"\n✅ Primary Result: {primary_result['status']} for {primary_result['disease_name']} ({primary_result['confidence']:.2%})")
+            
+            return jsonify({
+                'success': True,
+                'primary_result': {
+                    'disease': primary_result['disease_name'],
+                    'status': primary_result['status'],  # 'Normal' or 'Positive'
+                    'predicted_class': primary_result['predicted_class'],
+                    'confidence': primary_result['confidence']
+                },
+                'remaining_predictions': remaining_predictions,  # Other diseases only
+                'model_info': {
+                    'input_size': '224x224',
+                    'checked_disease': primary_result['disease_name']
+                }
+            })
+        else:
+            # Run prediction on all models (original behavior)
+            print("🔮 Running inference on all models...")
+            prediction_results = predict_with_all_models(img_array)
 
-        # Get results
-        predicted_idx = int(np.argmax(predictions))
-        predicted_class = CLASS_NAMES[predicted_idx]
-        display_name = DISPLAY_NAMES.get(predicted_class, predicted_class)
-        confidence = float(predictions[predicted_idx])
+            # Get results
+            predicted_class = prediction_results['predicted_class']
+            confidence = prediction_results['confidence']
+            probabilities = prediction_results['probabilities']
 
-        # Create probability dictionary with display names
-        probabilities = {}
-        for i, (name, prob) in enumerate(zip(CLASS_NAMES, predictions)):
-            display = DISPLAY_NAMES.get(name, name)
-            probabilities[display] = float(prob)
+            # Sort probabilities by value
+            sorted_probs = dict(sorted(
+                probabilities.items(),
+                key=lambda x: x[1],
+                reverse=True
+            ))
 
-        # Sort by probability
-        sorted_probs = dict(sorted(
-            probabilities.items(),
-            key=lambda x: x[1],
-            reverse=True
-        ))
+            print(f"\n✅ Final Prediction: {predicted_class} ({confidence:.2%})")
+            print(f"   Top 3 predictions:")
+            for i, (name, prob) in enumerate(list(sorted_probs.items())[:3]):
+                print(f"   {i+1}. {name}: {prob:.2%}")
 
-        print(f"✅ Prediction: {display_name} ({confidence:.2%})")
-        print(f"   Top 3 predictions:")
-        for i, (name, prob) in enumerate(list(sorted_probs.items())[:3]):
-            print(f"   {i+1}. {name}: {prob:.2%}")
-
-        return jsonify({
-            'success': True,
-            'predicted_class': display_name,
-            'confidence': confidence,
-            'probabilities': sorted_probs,
-            'all_probabilities': probabilities,
-            'model_info': {
-                'input_size': '224x224',
-                'classes': len(CLASS_NAMES)
-            }
-        })
+            return jsonify({
+                'success': True,
+                'predicted_class': predicted_class,
+                'confidence': confidence,
+                'probabilities': sorted_probs,
+                'all_probabilities': probabilities,
+                'model_info': {
+                    'input_size': '224x224',
+                    'classes': len(ALL_CLASSES),
+                    'models_used': len(models)
+                }
+            })
 
     except Exception as e:
         print(f"❌ Prediction error: {e}")
@@ -237,152 +539,22 @@ def predict():
 def get_classes():
     """Return list of disease classes"""
     return jsonify({
-        'classes': [DISPLAY_NAMES.get(name, name) for name in CLASS_NAMES],
-        'count': len(CLASS_NAMES)
+        'classes': ALL_CLASSES,
+        'count': len(ALL_CLASSES)
     })
-
-@app.route('/vision-test', methods=['POST'])
-def vision_test():
-    """
-    Process vision test results and return analysis
-    Expects JSON: {
-        "test_mode": "single_letter" or "full_chart",
-        "total_questions": 5,
-        "correct_answers": 4,
-        "responses": [
-            {
-                "letter_shown": "E",
-                "user_response": "E",
-                "is_correct": true,
-                "timestamp": "2024-01-01T12:00:00"
-            }
-        ],
-        "timestamp": "2024-01-01T12:00:00"
-    }
-    Returns: {
-        "health_score": 85,
-        "vision_status": "Good",
-        "acuity_level": "20/20",
-        "analysis": {...},
-        "recommendations": [...]
-    }
-    """
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        # Extract test data
-        total_questions = data.get('total_questions', 0)
-        correct_answers = data.get('correct_answers', 0)
-        responses = data.get('responses', [])
-        test_mode = data.get('test_mode', 'single_letter')
-        
-        # Calculate accuracy
-        if total_questions == 0:
-            accuracy = 0
-        else:
-            accuracy = (correct_answers / total_questions) * 100
-        
-        # Calculate health score (0-100)
-        # Base score on accuracy with some adjustments
-        health_score = int(accuracy)
-        
-        # Determine vision status
-        if accuracy >= 90:
-            vision_status = "Excellent"
-            acuity_level = "20/20 or better"
-            status_color = "green"
-        elif accuracy >= 75:
-            vision_status = "Good"
-            acuity_level = "20/25 to 20/30"
-            status_color = "light_green"
-        elif accuracy >= 60:
-            vision_status = "Fair"
-            acuity_level = "20/40 to 20/50"
-            status_color = "yellow"
-        elif accuracy >= 40:
-            vision_status = "Below Average"
-            acuity_level = "20/70 to 20/100"
-            status_color = "orange"
-        else:
-            vision_status = "Poor"
-            acuity_level = "20/200 or worse"
-            status_color = "red"
-        
-        # Generate recommendations
-        recommendations = []
-        if accuracy < 80:
-            recommendations.append("Schedule a comprehensive eye examination")
-            recommendations.append("Ensure proper lighting when reading")
-            
-        if accuracy < 60:
-            recommendations.append("Consult an optometrist or ophthalmologist soon")
-            recommendations.append("Avoid prolonged screen time without breaks")
-            
-        if accuracy >= 80:
-            recommendations.append("Continue regular eye check-ups annually")
-            recommendations.append("Maintain good eye health habits")
-        
-        recommendations.append("Follow the 20-20-20 rule for screen use")
-        recommendations.append("Protect eyes from UV radiation with sunglasses")
-        
-        # Analyze response patterns
-        analysis = {
-            "total_tests": total_questions,
-            "correct_responses": correct_answers,
-            "accuracy_percentage": round(accuracy, 1),
-            "test_mode": test_mode,
-            "timestamp": data.get('timestamp', ''),
-        }
-        
-        # Detailed analysis
-        if responses:
-            incorrect_letters = [r['letter_shown'] for r in responses if not r.get('is_correct', False)]
-            analysis['missed_letters'] = incorrect_letters
-            analysis['response_count'] = len(responses)
-        
-        result = {
-            'success': True,
-            'health_score': health_score,
-            'vision_status': vision_status,
-            'acuity_level': acuity_level,
-            'status_color': status_color,
-            'analysis': analysis,
-            'recommendations': recommendations,
-            'test_summary': {
-                'completed_at': data.get('timestamp', ''),
-                'test_duration': f"{total_questions * 5} seconds (estimated)"
-            }
-        }
-        
-        print(f"✅ Vision test processed: {correct_answers}/{total_questions} ({accuracy:.1f}%)")
-        print(f"   Health Score: {health_score}, Status: {vision_status}")
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        print(f"❌ Vision test error: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        return jsonify({
-            'error': 'Vision test processing failed',
-            'message': str(e)
-        }), 500
 
 if __name__ == '__main__':
     print("=" * 70)
     print("🚀 iLab+ Eye Disease Detection API Server")
+    print("   Multi-Model Architecture")
     print("=" * 70)
-    print(f"Model path: {MODEL_PATH}")
+    print(f"Models directory: {MODELS_DIR}")
     print("")
 
-    # Load model on startup
-    model_loaded = load_keras_model()
+    # Load all models on startup
+    models_loaded = load_all_models()
 
-    if model_loaded:
+    if models_loaded:
         print("\n" + "=" * 70)
         print("📡 Server Starting...")
         print("=" * 70)
@@ -395,15 +567,15 @@ if __name__ == '__main__':
         print("   GET  /classes  - List all disease classes")
         print("")
         print("🎯 Detectable Diseases:")
-        for i, name in enumerate(CLASS_NAMES, 1):
-            print(f"   {i}. {DISPLAY_NAMES.get(name, name)}")
+        for i, cls in enumerate(ALL_CLASSES, 1):
+            print(f"   {i}. {cls}")
         print("\n" + "=" * 70)
         print("✅ Server Ready! Waiting for requests...")
         print("=" * 70)
     else:
         print("\n" + "=" * 70)
         print("⚠️  Server will start but predictions won't work")
-        print("   Please check the model file path and restart")
+        print("   Please check the model file paths and restart")
         print("=" * 70)
 
     # Start Flask server
