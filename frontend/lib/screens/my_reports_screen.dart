@@ -1,9 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 import '../theme/app_theme.dart';
 
 class MyReportsScreen extends StatelessWidget {
   const MyReportsScreen({super.key});
 
+  // 1. METHODS MOVED HERE (Class Level) -----------------------
+  
+  Future<void> _downloadReport(BuildContext context) async {
+    try {
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          build: (pw.Context context) => pw.Center(
+            child: pw.Text(
+                'My Health Report\n\nCompleted Tests: 12\nAvg Health Score: 85%\nHealth Rating: 4.5'),
+          ),
+        ),
+      );
+      final bytes = await pdf.save();
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/my_health_report.pdf');
+      await file.writeAsBytes(bytes);
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Report downloaded to ${file.path}')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+    }
+  }
+
+  Future<void> _shareReport(BuildContext context) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/my_health_report.pdf');
+    if (await file.exists()) {
+      await Share.shareXFiles([XFile(file.path)], text: 'My Health Report');
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please download the report first.')),
+        );
+      }
+    }
+  }
+
+  // 2. BUILD METHOD -------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -11,32 +58,21 @@ class MyReportsScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppTheme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'My Reports',
-          style: TextStyle(
-            color: AppTheme.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('My Reports', style: TextStyle(color: Colors.black)),
+        iconTheme: const IconThemeData(color: Colors.black),
+        // Added actions so you can actually use the methods
         actions: [
           IconButton(
-            icon: Icon(Icons.calendar_today, color: AppTheme.peachColor),
-            onPressed: () {
-              // Calendar view
-            },
+            icon: const Icon(Icons.download),
+            onPressed: () => _downloadReport(context),
           ),
           IconButton(
-            icon: Icon(Icons.download, color: AppTheme.peachColor),
-            onPressed: () {
-              // Export all reports
-            },
+            icon: const Icon(Icons.share),
+            onPressed: () => _shareReport(context),
           ),
         ],
       ),
+      // 3. BODY CORRECTLY CONNECTED ----------------------------
       body: Column(
         children: [
           // Stats Cards
@@ -164,6 +200,8 @@ class MyReportsScreen extends StatelessWidget {
     );
   }
 
+  // 4. HELPER WIDGETS -------------------------------------------
+  
   Widget _buildStatCard(
     BuildContext context, {
     required IconData icon,
