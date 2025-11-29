@@ -3,7 +3,9 @@ import 'dart:async';
 import 'dart:math';
 import '../theme/app_theme.dart';
 import '../data/vision_data.dart';
+import '../services/api_service.dart';
 import 'result_summary_screen.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class VisionTestScreen extends StatefulWidget {
   const VisionTestScreen({super.key});
@@ -18,6 +20,16 @@ class _VisionTestScreenState extends State<VisionTestScreen>
   String _currentLetter = 'E';
   int _testProgress = 0;
   final int _totalTests = 5;
+
+  // Speech recognition
+  late stt.SpeechToText _speech;
+  bool _speechAvailable = false;
+  String _lastRecognizedWords = '';
+
+  // Test results tracking
+  List<Map<String, dynamic>> _testResponses = [];
+  int _correctAnswers = 0;
+  bool _answerValidated = false;
   late AnimationController _waveAnimationController;
   late AnimationController _pulseAnimationController;
 
@@ -30,15 +42,14 @@ class _VisionTestScreenState extends State<VisionTestScreen>
 
   // Auto-advance timer
   Timer? _autoAdvanceTimer;
-  bool _autoAdvanceMode = false;
   final int _autoAdvanceSeconds = 5; // Time to show each letter
 
   // Snellen chart data
   final List<Map<String, dynamic>> _chartRows = [
-    {"letters": "E",       "acuity": "20/200", "size": 80.0},
-    {"letters": "F P",     "acuity": "20/100", "size": 50.0},
-    {"letters": "T O Z",   "acuity": "20/70",  "size": 40.0},
-    {"letters": "L P E D", "acuity": "20/50",  "size": 30.0},
+    {"letters": "E", "acuity": "20/200", "size": 80.0},
+    {"letters": "F P", "acuity": "20/100", "size": 50.0},
+    {"letters": "T O Z", "acuity": "20/70", "size": 40.0},
+    {"letters": "L P E D", "acuity": "20/50", "size": 30.0},
     {"letters": "P E C F D", "acuity": "20/40", "size": 24.0},
     {"letters": "E D F C Z P", "acuity": "20/30", "size": 18.0},
     {"letters": "F E L O P Z D", "acuity": "20/20", "size": 14.0},
@@ -54,14 +65,21 @@ class _VisionTestScreenState extends State<VisionTestScreen>
     // Initialize test letters from VisionData optotypes
     _testLetters = List.generate(
       _totalTests,
-      (index) => VisionData.optotypes[(DateTime.now().millisecondsSinceEpoch + index) % VisionData.optotypes.length],
+      (index) => VisionData.optotypes[
+          (DateTime.now().millisecondsSinceEpoch + index) %
+              VisionData.optotypes.length],
     );
     _currentLetter = _testLetters[0];
+
+    // Initialize speech recognition
+    _speech = stt.SpeechToText();
+    _initSpeech();
 
     // Estimate pixels per mm based on screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final size = MediaQuery.of(context).size;
-      final diagonal = sqrt(size.width * size.width + size.height * size.height);
+      final diagonal =
+          sqrt(size.width * size.width + size.height * size.height);
       // Assume ~96 DPI as default, adjust based on actual screen
       _pixelsPerMm = diagonal / 254; // Rough estimate
       setState(() {});
@@ -80,11 +98,43 @@ class _VisionTestScreenState extends State<VisionTestScreen>
     )..repeat(reverse: true);
   }
 
+  Future<void> _initSpeech() async {
+    try {
+      _speechAvailable = await _speech.initialize(
+        onError: (error) {
+          print('Speech recognition error: $error');
+          if (error.errorMsg == 'not-allowed') {
+            _showFeedback(
+                'Microphone permission denied. Please allow microphone access in your browser.');
+          } else {
+            _showFeedback('Speech error: ${error.errorMsg}');
+          }
+        },
+        onStatus: (status) {
+          print('Speech recognition status: $status');
+          if (status == 'notListening' && _isListening && !_answerValidated) {
+            // Speech stopped but no answer validated - might have timed out
+            print('Speech stopped without validation');
+          }
+        },
+      );
+      setState(() {});
+
+      if (_speechAvailable) {
+        print('✅ Speech recognition initialized successfully');
+      }
+    } catch (e) {
+      print('Failed to initialize speech recognition: $e');
+      _speechAvailable = false;
+    }
+  }
+
   @override
   void dispose() {
     _autoAdvanceTimer?.cancel();
     _waveAnimationController.dispose();
     _pulseAnimationController.dispose();
+    _speech.stop();
     super.dispose();
   }
 
@@ -99,34 +149,231 @@ class _VisionTestScreenState extends State<VisionTestScreen>
   void _startSingleLetterTest() {
     setState(() {
       _isListening = true;
-      _autoAdvanceMode = true;
-      _testProgress = 0; // Reset to first letter
+      _testProgress = 0;
       _currentLetter = _testLetters[0];
+      _testResponses = [];
+      _correctAnswers = 0;
+      _answerValidated = false;
     });
 
     _waveAnimationController.repeat();
+    _startVoiceRecognition();
+  }
 
-    // TODO: Add actual speech recognition here (e.g. speechToText.listen())
+  void _startVoiceRecognition() async {
+    setState(() {
+      _answerValidated = false;
+    });
 
-    // Start periodic timer that auto-advances every 5 seconds
-    _autoAdvanceTimer?.cancel();
-    _autoAdvanceTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_testProgress < _totalTests - 1) {
-        // Move to next letter
-        setState(() {
-          _testProgress++;
-          _currentLetter = _testLetters[_testProgress];
-        });
+    if (!_speechAvailable) {
+      // Try to re-initialize speech (might prompt for permission)
+      await _initSpeech();
 
-        _showFeedback('Next letter...');
-        print("Moving to next letter: $_currentLetter");
-
-      } else {
-        // End of the list - stop test
+      if (!_speechAvailable) {
+        _showFeedback(
+            'Speech recognition not available. Please allow microphone access in your browser settings.');
         _stopAutoAdvanceMode();
-        _showCompletionDialog();
+
+        // Show permission dialog
+        _showPermissionDialog();
+        return;
+      }
+    }
+
+    try {
+      bool isListening = await _speech.listen(
+        onResult: (result) {
+          setState(() {
+            _lastRecognizedWords = result.recognizedWords.toUpperCase();
+          });
+
+          // Check if user said the letter (only validate once)
+          if (result.finalResult &&
+              _lastRecognizedWords.isNotEmpty &&
+              !_answerValidated) {
+            _validateAnswer(_lastRecognizedWords);
+          }
+        },
+        listenFor: const Duration(seconds: 5),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: true,
+        cancelOnError: true,
+        listenMode: stt.ListenMode.confirmation,
+      );
+
+      if (!isListening) {
+        print('Failed to start listening - permission might be denied');
+        _showPermissionDialog();
+        _stopAutoAdvanceMode();
+        return;
+      }
+
+      // Auto-advance timer after 5 seconds
+      _autoAdvanceTimer?.cancel();
+      _autoAdvanceTimer = Timer(const Duration(seconds: 5), () {
+        if (!_answerValidated) {
+          // Record no answer if nothing spoken
+          if (_lastRecognizedWords.isEmpty) {
+            _recordResponse('', false);
+          } else {
+            // Validate partial result if no final result received
+            _validateAnswer(_lastRecognizedWords);
+          }
+        }
+      });
+    } catch (e) {
+      print('Error starting voice recognition: $e');
+      _showFeedback('Error: $e');
+    }
+  }
+
+  void _validateAnswer(String spokenText) {
+    if (_answerValidated) return; // Prevent duplicate validation
+
+    _answerValidated = true;
+    _autoAdvanceTimer?.cancel(); // Cancel auto-advance timer
+
+    // Extract first letter from spoken text
+    String firstLetter = spokenText.trim().split(' ').first;
+    if (firstLetter.isEmpty) {
+      _recordResponse(spokenText, false);
+      _showFeedback('Could not understand');
+    } else {
+      // Check if it matches current letter
+      bool isCorrect = firstLetter[0] == _currentLetter[0];
+
+      _recordResponse(spokenText, isCorrect);
+
+      if (isCorrect) {
+        _correctAnswers++;
+        _showFeedback('Correct! ✓');
+      } else {
+        _showFeedback('You said: $spokenText (Expected: $_currentLetter)');
+      }
+    }
+
+    // Move to next letter after short delay
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (_testProgress < _totalTests - 1) {
+        _moveToNextLetter();
+      } else {
+        _completeTest();
       }
     });
+  }
+
+  void _recordResponse(String spokenText, bool isCorrect) {
+    _testResponses.add({
+      'letter_shown': _currentLetter,
+      'user_response': spokenText,
+      'is_correct': isCorrect,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
+  void _moveToNextLetter() async {
+    await _speech.stop();
+
+    setState(() {
+      _testProgress++;
+      _currentLetter = _testLetters[_testProgress];
+      _lastRecognizedWords = '';
+    });
+
+    _startVoiceRecognition();
+  }
+
+  void _completeTest() async {
+    await _speech.stop();
+    _stopAutoAdvanceMode();
+
+    // Calculate accuracy
+    double accuracy = _testResponses.isEmpty
+        ? 0
+        : (_correctAnswers / _testResponses.length) * 100;
+
+    print(
+        'Test completed: $_correctAnswers correct out of ${_testResponses.length}');
+    print('Accuracy: ${accuracy.toStringAsFixed(1)}%');
+    print('Responses: $_testResponses');
+
+    // Submit to backend
+    _submitTestResults();
+  }
+
+  void _submitTestResults() async {
+    try {
+      // Show loading dialog
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Submit to backend
+      final result = await ApiService.submitVisionTest(
+        testMode: 'single_letter',
+        totalQuestions: _totalTests,
+        correctAnswers: _correctAnswers,
+        responses: _testResponses,
+      );
+
+      // Close loading dialog
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      // Navigate to results with backend data
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ResultSummaryScreen(
+            visionTestResult: result,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error submitting test results: $e');
+
+      // Close loading dialog if still open
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      // Show error and navigate with local results
+      _showFeedback('Backend unavailable. Showing local results.');
+
+      // Calculate local results as fallback
+      double accuracy = _testResponses.isEmpty
+          ? 0
+          : (_correctAnswers / _testResponses.length) * 100;
+      int healthScore = accuracy.toInt();
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ResultSummaryScreen(
+            visionTestResult: VisionTestResult(
+              success: true,
+              healthScore: healthScore,
+              visionStatus: accuracy >= 80 ? 'Good' : 'Fair',
+              acuityLevel: accuracy >= 80 ? '20/20' : '20/40',
+              statusColor: 'yellow',
+              analysis: {
+                'total_tests': _totalTests,
+                'correct_responses': _correctAnswers,
+                'accuracy_percentage': accuracy,
+              },
+              recommendations: [
+                'Schedule a comprehensive eye examination',
+                'Follow the 20-20-20 rule for screen use',
+              ],
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   void _startChartTest() {
@@ -154,11 +401,88 @@ class _VisionTestScreenState extends State<VisionTestScreen>
   void _stopAutoAdvanceMode() {
     _autoAdvanceTimer?.cancel();
     _waveAnimationController.stop();
+    _speech.stop();
     setState(() {
-      _autoAdvanceMode = false;
       _isListening = false;
       _currentRowIndex = -1;
     });
+  }
+
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.mic_off, color: AppTheme.errorRed),
+            const SizedBox(width: 12),
+            const Text('Microphone Access Required'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'To use the Voice Vision Test, please allow microphone access:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+                '1. Click the microphone icon in your browser address bar'),
+            const SizedBox(height: 8),
+            const Text('2. Select "Allow" for microphone permission'),
+            const SizedBox(height: 8),
+            const Text('3. Reload the page if needed'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.pastelBlue,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      color: AppTheme.peachColor, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Chrome blocks microphone on http://. Use https:// or localhost.',
+                      style: TextStyle(
+                          fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Try to re-initialize
+              await _initSpeech();
+              if (_speechAvailable) {
+                _showFeedback(
+                    'Microphone access granted! You can start the test now.');
+              }
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.peachColor,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showCompletionDialog() {
@@ -219,6 +543,51 @@ class _VisionTestScreenState extends State<VisionTestScreen>
         child: SingleChildScrollView(
           child: Column(
             children: [
+              // Microphone permission banner
+              if (!_speechAvailable)
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningOrange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.warningOrange),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.mic_off, color: AppTheme.warningOrange),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Microphone Access Required',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.warningOrange,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Please allow microphone access in your browser to use voice recognition.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.help_outline,
+                            color: AppTheme.warningOrange),
+                        onPressed: _showPermissionDialog,
+                      ),
+                    ],
+                  ),
+                ),
+
               // Progress Indicator
               _buildProgressIndicator(),
 
@@ -262,7 +631,8 @@ class _VisionTestScreenState extends State<VisionTestScreen>
       decoration: BoxDecoration(
         color: AppTheme.pastelBlue.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.peachColor.withOpacity(0.3), width: 1),
+        border:
+            Border.all(color: AppTheme.peachColor.withOpacity(0.3), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,9 +651,11 @@ class _VisionTestScreenState extends State<VisionTestScreen>
             ],
           ),
           const SizedBox(height: 12),
-          _buildInstructionItem(Icons.straighten, 'Distance: ~40cm (roughly arm\'s length)'),
+          _buildInstructionItem(
+              Icons.straighten, 'Distance: ~40cm (roughly arm\'s length)'),
           const SizedBox(height: 8),
-          _buildInstructionItem(Icons.remove_red_eye_outlined, 'Cover one eye with a cupped palm (do not press on eyeball)'),
+          _buildInstructionItem(Icons.remove_red_eye_outlined,
+              'Cover one eye with a cupped palm (do not press on eyeball)'),
           const SizedBox(height: 8),
           _buildInstructionItem(Icons.mic, 'Read the letters aloud clearly'),
         ],
@@ -316,7 +688,8 @@ class _VisionTestScreenState extends State<VisionTestScreen>
     }
 
     // Calculate calibrated letter size based on Snellen scale
-    final letterHeightPixels = VisionData.getLetterSizePixels(_currentScale, _pixelsPerMm);
+    final letterHeightPixels =
+        VisionData.getLetterSizePixels(_currentScale, _pixelsPerMm);
 
     return Container(
       height: 350,
@@ -343,7 +716,8 @@ class _VisionTestScreenState extends State<VisionTestScreen>
               child: Text(
                 _currentLetter,
                 style: TextStyle(
-                  fontSize: letterHeightPixels.clamp(80.0, 180.0), // Clamp for screen size
+                  fontSize: letterHeightPixels.clamp(
+                      80.0, 180.0), // Clamp for screen size
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
                   fontFamily: 'Poppins',
@@ -383,10 +757,13 @@ class _VisionTestScreenState extends State<VisionTestScreen>
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+              padding:
+                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
               margin: const EdgeInsets.symmetric(vertical: 4.0),
               decoration: BoxDecoration(
-                color: isActive ? AppTheme.peachColor.withOpacity(0.1) : Colors.transparent,
+                color: isActive
+                    ? AppTheme.peachColor.withOpacity(0.1)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
                 border: isActive
                     ? Border.all(color: AppTheme.peachColor, width: 2)
@@ -428,7 +805,8 @@ class _VisionTestScreenState extends State<VisionTestScreen>
                   SizedBox(
                     width: 50,
                     child: isActive
-                        ? Icon(Icons.arrow_back, color: AppTheme.peachColor, size: 20)
+                        ? Icon(Icons.arrow_back,
+                            color: AppTheme.peachColor, size: 20)
                         : null,
                   ),
                 ],
@@ -457,12 +835,17 @@ class _VisionTestScreenState extends State<VisionTestScreen>
 
           // Status Text
           Text(
-            _isListening ? 'Listening...' : 'Tap microphone to speak',
+            _isListening
+                ? (_lastRecognizedWords.isEmpty
+                    ? 'Listening...'
+                    : 'You said: $_lastRecognizedWords')
+                : 'Tap "Start Test" to begin',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppTheme.peachColor,
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
                 ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -495,11 +878,14 @@ class _VisionTestScreenState extends State<VisionTestScreen>
           return AnimatedBuilder(
             animation: _waveAnimationController,
             builder: (context, child) {
-              final waveValue = sin((_waveAnimationController.value * 2 * pi) + (index * 0.5));
-              final height = 20 + (30 * waveValue.abs()); // Use abs() to ensure positive values
+              final waveValue = sin(
+                  (_waveAnimationController.value * 2 * pi) + (index * 0.5));
+              final height = 20 +
+                  (30 * waveValue.abs()); // Use abs() to ensure positive values
               return Container(
                 width: 6,
-                height: height.clamp(10.0, 80.0), // Clamp between min and max values
+                height: height.clamp(
+                    10.0, 80.0), // Clamp between min and max values
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
                   color: AppTheme.peachColor,
@@ -535,14 +921,18 @@ class _VisionTestScreenState extends State<VisionTestScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: !_showFullChart ? AppTheme.peachColor : Colors.transparent,
+                          color: !_showFullChart
+                              ? AppTheme.peachColor
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(30),
                         ),
                         child: Text(
                           'Single Letter',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: !_showFullChart ? Colors.white : AppTheme.peachColor,
+                            color: !_showFullChart
+                                ? Colors.white
+                                : AppTheme.peachColor,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -556,14 +946,18 @@ class _VisionTestScreenState extends State<VisionTestScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: _showFullChart ? AppTheme.peachColor : Colors.transparent,
+                          color: _showFullChart
+                              ? AppTheme.peachColor
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(30),
                         ),
                         child: Text(
                           'Full Chart',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: _showFullChart ? Colors.white : AppTheme.peachColor,
+                            color: _showFullChart
+                                ? Colors.white
+                                : AppTheme.peachColor,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -580,7 +974,9 @@ class _VisionTestScreenState extends State<VisionTestScreen>
             Padding(
               padding: const EdgeInsets.only(bottom: 20),
               child: Text(
-                _showFullChart ? "Read the highlighted line..." : "Auto-changing in 5 seconds...",
+                _showFullChart
+                    ? "Read the highlighted line..."
+                    : "Auto-changing in 5 seconds...",
                 style: TextStyle(
                   color: AppTheme.peachColor,
                   fontSize: 16,
@@ -600,14 +996,19 @@ class _VisionTestScreenState extends State<VisionTestScreen>
                 size: 24,
               ),
               label: Text(
-                _isListening ? 'Stop Test' : 'Start Test',
+                _isListening
+                    ? 'Stop Test'
+                    : (_speechAvailable
+                        ? 'Start Test'
+                        : 'Enable Microphone & Start'),
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isListening ? Colors.red.shade400 : AppTheme.peachColor,
+                backgroundColor:
+                    _isListening ? Colors.red.shade400 : AppTheme.peachColor,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -616,6 +1017,22 @@ class _VisionTestScreenState extends State<VisionTestScreen>
               ),
             ),
           ),
+
+          // Microphone permission hint
+          if (!_isListening && !_speechAvailable)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '🎤 Browser will ask for microphone permission when you start',
+                style: TextStyle(
+                  color: AppTheme.peachColor,
+                  fontSize: 13,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
           const SizedBox(height: 16),
 
           // Info Text
@@ -629,7 +1046,8 @@ class _VisionTestScreenState extends State<VisionTestScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: AppTheme.peachColor),
+                  Icon(Icons.info_outline,
+                      size: 16, color: AppTheme.peachColor),
                   const SizedBox(width: 8),
                   Text(
                     _showFullChart

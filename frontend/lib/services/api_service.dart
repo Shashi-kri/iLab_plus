@@ -12,6 +12,7 @@ class ApiService {
   static const String healthEndpoint = '/health';
   static const String predictEndpoint = '/predict';
   static const String classesEndpoint = '/classes';
+  static const String visionTestEndpoint = '/vision-test';
 
   /// Check if the backend server is healthy
   static Future<Map<String, dynamic>> checkHealth() async {
@@ -124,6 +125,94 @@ class ApiService {
       throw Exception('Failed to predict disease: $e');
     }
   }
+
+  /// Submit vision test results to backend
+  static Future<VisionTestResult> submitVisionTest({
+    required String testMode,
+    required int totalQuestions,
+    required int correctAnswers,
+    required List<Map<String, dynamic>> responses,
+  }) async {
+    try {
+      final requestBody = {
+        'test_mode': testMode,
+        'total_questions': totalQuestions,
+        'correct_answers': correctAnswers,
+        'responses': responses,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl$visionTestEndpoint'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(requestBody),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return VisionTestResult.fromJson(data);
+      } else {
+        final error = json.decode(response.body);
+        throw Exception(error['message'] ?? 'Vision test submission failed');
+      }
+    } catch (e) {
+      throw Exception('Failed to submit vision test: $e');
+    }
+  }
+}
+
+/// Model for vision test results
+class VisionTestResult {
+  final bool success;
+  final int healthScore;
+  final String visionStatus;
+  final String acuityLevel;
+  final String statusColor;
+  final Map<String, dynamic> analysis;
+  final List<String> recommendations;
+  final Map<String, dynamic>? testSummary;
+
+  VisionTestResult({
+    required this.success,
+    required this.healthScore,
+    required this.visionStatus,
+    required this.acuityLevel,
+    required this.statusColor,
+    required this.analysis,
+    required this.recommendations,
+    this.testSummary,
+  });
+
+  factory VisionTestResult.fromJson(Map<String, dynamic> json) {
+    return VisionTestResult(
+      success: json['success'] ?? false,
+      healthScore: json['health_score'] ?? 0,
+      visionStatus: json['vision_status'] ?? 'Unknown',
+      acuityLevel: json['acuity_level'] ?? 'Unknown',
+      statusColor: json['status_color'] ?? 'gray',
+      analysis: json['analysis'] ?? {},
+      recommendations: List<String>.from(json['recommendations'] ?? []),
+      testSummary: json['test_summary'],
+    );
+  }
+
+  /// Get accuracy from analysis
+  double get accuracy => (analysis['accuracy_percentage'] ?? 0.0).toDouble();
+
+  /// Get correct responses count
+  int get correctResponses => analysis['correct_responses'] ?? 0;
+
+  /// Get total tests count
+  int get totalTests => analysis['total_tests'] ?? 0;
+
+  /// Get missed letters
+  List<String> get missedLetters => 
+      List<String>.from(analysis['missed_letters'] ?? []);
+
+  /// Get completion timestamp
+  String get completedAt => testSummary?['completed_at'] ?? '';
 }
 
 /// Model for prediction results

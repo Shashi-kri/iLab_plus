@@ -16,9 +16,13 @@ try:
     import tensorflow as tf
     from tensorflow.keras.models import load_model
     print("✅ Using TensorFlow Keras")
+    TENSORFLOW_AVAILABLE = True
 except ImportError as e:
-    print(f"❌ TensorFlow not available: {e}")
-    raise
+    print(f"⚠️  TensorFlow not available: {e}")
+    print("   Vision test endpoint will still work")
+    TENSORFLOW_AVAILABLE = False
+    tf = None
+    load_model = None
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
@@ -52,6 +56,10 @@ model = None
 def load_keras_model():
     """Load the Keras model - handles corrupted model files"""
     global model
+    
+    if not TENSORFLOW_AVAILABLE:
+        print("⚠️  TensorFlow not available - skipping model loading")
+        return False
 
     # Try multiple model files
     model_paths = [
@@ -232,6 +240,137 @@ def get_classes():
         'classes': [DISPLAY_NAMES.get(name, name) for name in CLASS_NAMES],
         'count': len(CLASS_NAMES)
     })
+
+@app.route('/vision-test', methods=['POST'])
+def vision_test():
+    """
+    Process vision test results and return analysis
+    Expects JSON: {
+        "test_mode": "single_letter" or "full_chart",
+        "total_questions": 5,
+        "correct_answers": 4,
+        "responses": [
+            {
+                "letter_shown": "E",
+                "user_response": "E",
+                "is_correct": true,
+                "timestamp": "2024-01-01T12:00:00"
+            }
+        ],
+        "timestamp": "2024-01-01T12:00:00"
+    }
+    Returns: {
+        "health_score": 85,
+        "vision_status": "Good",
+        "acuity_level": "20/20",
+        "analysis": {...},
+        "recommendations": [...]
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Extract test data
+        total_questions = data.get('total_questions', 0)
+        correct_answers = data.get('correct_answers', 0)
+        responses = data.get('responses', [])
+        test_mode = data.get('test_mode', 'single_letter')
+        
+        # Calculate accuracy
+        if total_questions == 0:
+            accuracy = 0
+        else:
+            accuracy = (correct_answers / total_questions) * 100
+        
+        # Calculate health score (0-100)
+        # Base score on accuracy with some adjustments
+        health_score = int(accuracy)
+        
+        # Determine vision status
+        if accuracy >= 90:
+            vision_status = "Excellent"
+            acuity_level = "20/20 or better"
+            status_color = "green"
+        elif accuracy >= 75:
+            vision_status = "Good"
+            acuity_level = "20/25 to 20/30"
+            status_color = "light_green"
+        elif accuracy >= 60:
+            vision_status = "Fair"
+            acuity_level = "20/40 to 20/50"
+            status_color = "yellow"
+        elif accuracy >= 40:
+            vision_status = "Below Average"
+            acuity_level = "20/70 to 20/100"
+            status_color = "orange"
+        else:
+            vision_status = "Poor"
+            acuity_level = "20/200 or worse"
+            status_color = "red"
+        
+        # Generate recommendations
+        recommendations = []
+        if accuracy < 80:
+            recommendations.append("Schedule a comprehensive eye examination")
+            recommendations.append("Ensure proper lighting when reading")
+            
+        if accuracy < 60:
+            recommendations.append("Consult an optometrist or ophthalmologist soon")
+            recommendations.append("Avoid prolonged screen time without breaks")
+            
+        if accuracy >= 80:
+            recommendations.append("Continue regular eye check-ups annually")
+            recommendations.append("Maintain good eye health habits")
+        
+        recommendations.append("Follow the 20-20-20 rule for screen use")
+        recommendations.append("Protect eyes from UV radiation with sunglasses")
+        
+        # Analyze response patterns
+        analysis = {
+            "total_tests": total_questions,
+            "correct_responses": correct_answers,
+            "accuracy_percentage": round(accuracy, 1),
+            "test_mode": test_mode,
+            "timestamp": data.get('timestamp', ''),
+        }
+        
+        # Detailed analysis
+        if responses:
+            incorrect_letters = [r['letter_shown'] for r in responses if not r.get('is_correct', False)]
+            analysis['missed_letters'] = incorrect_letters
+            analysis['response_count'] = len(responses)
+        
+        result = {
+            'success': True,
+            'health_score': health_score,
+            'vision_status': vision_status,
+            'acuity_level': acuity_level,
+            'status_color': status_color,
+            'analysis': analysis,
+            'recommendations': recommendations,
+            'test_summary': {
+                'completed_at': data.get('timestamp', ''),
+                'test_duration': f"{total_questions * 5} seconds (estimated)"
+            }
+        }
+        
+        print(f"✅ Vision test processed: {correct_answers}/{total_questions} ({accuracy:.1f}%)")
+        print(f"   Health Score: {health_score}, Status: {vision_status}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Vision test error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'error': 'Vision test processing failed',
+            'message': str(e)
+        }), 500
 
 if __name__ == '__main__':
     print("=" * 70)
