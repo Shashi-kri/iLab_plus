@@ -822,57 +822,6 @@ class _AIScanScreenState extends State<AIScanScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-
-        // All Probabilities
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.accentBlue.withOpacity(0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'All Predictions',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...(_result!.getTopPredictions(7).map(
-                    (entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              style: TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            '${(entry.value * 100).toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )),
-            ],
-          ),
-        ),
         const SizedBox(height: 24),
 
         // Scan Another Image Button
