@@ -1,0 +1,58 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter run -d chrome
+
+## exception
+
+DartDevelopmentServiceException: DartDevelopmentServiceException: Failed to start Dart Development Service
+
+```
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.38.2, on Microsoft Windows [Version 10.0.26200.6899], locale en-IN) [338ms]
+    [32m•[39m Flutter version 3.38.2 on channel stable at C:\flutter\flutter
+    [32m•[39m Upstream repository https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision f5a8537f90 (11 days ago), 2025-11-18 09:27:21 -0500
+    [32m•[39m Engine revision b5990e5ccc
+    [32m•[39m Dart version 3.10.0
+    [32m•[39m DevTools version 2.51.1
+    [32m•[39m Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop, enable-windows-desktop, enable-android, enable-ios,
+      cli-animations, enable-native-assets, omit-legacy-version-file, enable-lldb-debugging
+
+[32m[✓][39m Windows Version (Windows 11 or higher, 25H2, 2009) [1,527ms]
+
+[31m[✗][39m Android toolchain - develop for Android devices [201ms]
+    [32m•[39m Android SDK at C:\Users\shash\AppData\Local\Android\Sdk
+    [32m•[39m Emulator version unknown
+    [31m✗[39m cmdline-tools component is missing.
+      Try installing or updating Android Studio.
+      Alternatively, download the tools from https://developer.android.com/studio#command-line-tools-only and make sure to set the
+      ANDROID_HOME environment variable.
+      See https://developer.android.com/studio/command-line for more details.
+
+[32m[✓][39m Chrome - develop for the web [190ms]
+    [32m•[39m Chrome at C:\Program Files\Google\Chrome\Application\chrome.exe
+
+[33m[!][39m Visual Studio - develop Windows apps (Visual Studio Build Tools 2019 16.11.52) [189ms]
+    [32m•[39m Visual Studio at C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools
+    [32m•[39m Visual Studio Build Tools 2019 version 16.11.36602.28
+    [32m•[39m Windows 10 SDK version 10.0.19041.0
+    [31m✗[39m The current Visual Studio installation is incomplete.
+      Please use Visual Studio Installer to complete the installation or reinstall Visual Studio.
+
+[32m[✓][39m Connected device (3 available) [78ms]
+    [32m•[39m Windows (desktop) • windows • windows-x64    • Microsoft Windows [Version 10.0.26200.6899]
+    [32m•[39m Chrome (web)      • chrome  • web-javascript • Google Chrome 142.0.7444.176
+    [32m•[39m Edge (web)        • edge    • web-javascript • Microsoft Edge 142.0.3595.94
+
+[32m[✓][39m Network resources [1,695ms]
+    [32m•[39m All expected network resources are available.
+
+[33m![39m Doctor found issues in 2 categories.
+```

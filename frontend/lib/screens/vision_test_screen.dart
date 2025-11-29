@@ -201,7 +201,8 @@ class _VisionTestScreenState extends State<VisionTestScreen>
           });
 
           print('📢 Speech result: "${result.recognizedWords}"');
-          print('   Final: ${result.finalResult}, Confident: ${result.hasConfidenceRating}, Confidence: ${result.confidence}');
+          print(
+              '   Final: ${result.finalResult}, Confident: ${result.hasConfidenceRating}, Confidence: ${result.confidence}');
 
           // Validate on final result OR if we have text
           if (!_answerValidated && _lastRecognizedWords.isNotEmpty) {
@@ -429,17 +430,21 @@ class _VisionTestScreenState extends State<VisionTestScreen>
     setState(() {
       _isListening = true;
       _currentRowIndex = 0; // Start at the top (Big E)
+      _testProgress = 0; // Initialize progress counter
     });
 
     _waveAnimationController.repeat();
 
-    // The 5-second rule: Move to the next ROW automatically
+    // The 8-second rule: Move to the next ROW automatically
     _autoAdvanceTimer?.cancel();
-    _autoAdvanceTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    _autoAdvanceTimer = Timer.periodic(const Duration(seconds: 8), (timer) {
       if (_currentRowIndex < _chartRows.length - 1) {
         setState(() {
           _currentRowIndex++;
+          _testProgress++; // Update counter as rows change
         });
+        print(
+            '📊 Chart row ${_testProgress + 1}/${_chartRows.length}: ${_chartRows[_currentRowIndex]['acuity']}');
       } else {
         _stopAutoAdvanceMode();
         _showCompletionDialog();
@@ -454,6 +459,7 @@ class _VisionTestScreenState extends State<VisionTestScreen>
     setState(() {
       _isListening = false;
       _currentRowIndex = -1;
+      _testProgress = 0; // Reset counter
     });
   }
 
@@ -578,7 +584,9 @@ class _VisionTestScreenState extends State<VisionTestScreen>
             padding: const EdgeInsets.only(right: 16.0),
             child: Center(
               child: Text(
-                '$_testProgress / $_totalTests',
+                _showFullChart
+                    ? '${_testProgress + (_isListening ? 1 : 0)} / ${_chartRows.length}'
+                    : '$_testProgress / $_totalTests',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,

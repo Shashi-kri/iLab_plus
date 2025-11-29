@@ -5,12 +5,9 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   permission_handler_windows
-<<<<<<< HEAD
   share_plus
-  url_launcher_windows
-=======
   speech_to_text_windows
->>>>>>> 7dc016bbbf803371b13e78ee9d96053de58324fe
+  url_launcher_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
