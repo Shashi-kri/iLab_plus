@@ -255,7 +255,7 @@ class _AuthScreenState extends State<AuthScreen>
 
                         // Tab Content
                         SizedBox(
-                          height: _tabController.index == 0 ? 400 : 550,
+                          height: _tabController.index == 0 ? 400 : 600,
                           child: TabBarView(
                             controller: _tabController,
                             children: [

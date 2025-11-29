@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../theme/app_theme.dart';
+import '../services/api_service.dart';
 
 class ResultSummaryScreen extends StatefulWidget {
-  const ResultSummaryScreen({super.key});
+  final VisionTestResult? visionTestResult;
+  
+  const ResultSummaryScreen({
+    super.key,
+    this.visionTestResult,
+  });
 
   @override
   State<ResultSummaryScreen> createState() => _ResultSummaryScreenState();
@@ -13,11 +19,30 @@ class _ResultSummaryScreenState extends State<ResultSummaryScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
-  final int _healthScore = 85;
+  late int _healthScore;
+  late String _visionStatus;
+  late String _acuityLevel;
+  late List<String> _recommendations;
 
   @override
   void initState() {
     super.initState();
+
+    // Use backend data if available, otherwise use defaults
+    if (widget.visionTestResult != null) {
+      _healthScore = widget.visionTestResult!.healthScore;
+      _visionStatus = widget.visionTestResult!.visionStatus;
+      _acuityLevel = widget.visionTestResult!.acuityLevel;
+      _recommendations = widget.visionTestResult!.recommendations;
+    } else {
+      _healthScore = 85;
+      _visionStatus = 'Good';
+      _acuityLevel = '20/20';
+      _recommendations = [
+        'Continue regular eye check-ups annually',
+        'Follow the 20-20-20 rule for screen use',
+      ];
+    }
 
     _progressController = AnimationController(
       vsync: this,
@@ -175,7 +200,7 @@ class _ResultSummaryScreenState extends State<ResultSummaryScreen>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    _getHealthStatus(_healthScore),
+                    _visionStatus,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -217,22 +242,24 @@ class _ResultSummaryScreenState extends State<ResultSummaryScreen>
               children: [
                 _buildAnalysisItem(
                   icon: Icons.remove_red_eye,
-                  title: 'Overall Vision',
-                  value: 'Good',
-                  color: AppTheme.successGreen,
+                  title: 'Vision Status',
+                  value: _visionStatus,
+                  color: _healthScore >= 80 ? AppTheme.successGreen : AppTheme.warningOrange,
                 ),
                 const Divider(height: 24),
                 _buildAnalysisItem(
-                  icon: Icons.warning_amber,
-                  title: 'Potential Symptoms',
-                  value: 'Mild Eye Strain',
-                  color: AppTheme.warningOrange,
+                  icon: Icons.visibility,
+                  title: 'Estimated Acuity',
+                  value: _acuityLevel,
+                  color: AppTheme.accentBlue,
                 ),
                 const Divider(height: 24),
                 _buildAnalysisItem(
                   icon: Icons.computer,
-                  title: 'Screen Time Impact',
-                  value: 'Moderate',
+                  title: 'Accuracy',
+                  value: widget.visionTestResult != null 
+                      ? '${widget.visionTestResult!.accuracy.toStringAsFixed(1)}%'
+                      : 'N/A',
                   color: AppTheme.accentBlue,
                 ),
                 const SizedBox(height: 16),
@@ -315,6 +342,72 @@ class _ResultSummaryScreenState extends State<ResultSummaryScreen>
   }
 
   Widget _buildActionPlanSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.list_alt, color: AppTheme.peachColor, size: 28),
+            const SizedBox(width: 12),
+            Text(
+              'Recommended Actions',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: _recommendations.asMap().entries.map((entry) {
+                int index = entry.key;
+                String recommendation = entry.value;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: index < _recommendations.length - 1 ? 12 : 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: AppTheme.peachColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: AppTheme.peachColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          recommendation,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOldActionPlanSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -472,12 +565,6 @@ class _ResultSummaryScreenState extends State<ResultSummaryScreen>
         ),
       ],
     );
-  }
-
-  String _getHealthStatus(int score) {
-    if (score >= 80) return 'Good Health';
-    if (score >= 60) return 'Needs Attention';
-    return 'Consult Doctor';
   }
 
   void _showActionDialog(BuildContext context, String title, String message) {
