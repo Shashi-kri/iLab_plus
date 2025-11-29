@@ -543,6 +543,27 @@ def get_classes():
         'count': len(ALL_CLASSES)
     })
 
+@app.route('/chat', methods=['POST'])
+def chat():
+    """Simple chatbot endpoint for text messages"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').lower()
+        # Basic rule-based response (same as frontend logic)
+        if 'eye' in user_message and 'pain' in user_message:
+            response = 'Eye pain can have various causes. I recommend:\n\n1. Rest your eyes from screens\n2. Apply a warm compress\n3. If pain persists, consult an eye doctor immediately.'
+        elif 'exercise' in user_message or 'yoga' in user_message:
+            response = 'Great! Here are some eye exercises:\n\n• 20-20-20 Rule: Every 20 min, look at something 20 feet away for 20 seconds\n• Eye Rolling: Slowly roll eyes clockwise, then counterclockwise\n• Palming: Rub hands together and place over closed eyes'
+        elif 'screen' in user_message or 'computer' in user_message:
+            response = 'To reduce screen strain:\n\n• Keep screen 20-26 inches away\n• Adjust brightness to match surroundings\n• Use blue light filters\n• Take regular breaks\n• Blink frequently'
+        elif 'food' in user_message or 'diet' in user_message:
+            response = 'Foods great for eye health:\n\n🥕 Carrots (Vitamin A)\n🥬 Leafy greens (Lutein)\n🐟 Fish (Omega-3)\n🥚 Eggs (Zinc)\n🍊 Citrus fruits (Vitamin C)'
+        else:
+            response = 'I understand your concern about eye health. Could you provide more details? I can help with:\n\n• Eye exercises\n• Screen time tips\n• Nutrition advice\n• Common symptoms\n• When to see a doctor'
+        return jsonify({'response': response})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("=" * 70)
     print("🚀 iLab+ Eye Disease Detection API Server")

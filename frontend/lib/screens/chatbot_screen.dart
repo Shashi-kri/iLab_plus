@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -33,8 +35,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  final String backendUrl = 'http://10.172.120.174:5000/chat'; // Updated to your local IP address
+
+  Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
+
+    print('[DEBUG] _sendMessage called with: ${_messageController.text}');
 
     setState(() {
       _messages.add(
@@ -49,25 +55,55 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     final userMessage = _messageController.text;
     _messageController.clear();
 
-    // Simulate AI response
-    Future.delayed(const Duration(seconds: 1), () {
+    try {
+      final response = await http.post(
+        Uri.parse(backendUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'message': userMessage}),
+      );
+      print('[DEBUG] Backend response status: ${response.statusCode}');
+      print('[DEBUG] Backend response body: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _messages.add(
+            ChatMessage(
+              text: data['response'] ?? 'No response from server.',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+      } else {
+        setState(() {
+          _messages.add(
+            ChatMessage(
+              text: 'Error: ${response.statusCode}',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        });
+      }
+    } catch (e) {
+      print('[DEBUG] Exception in _sendMessage: $e');
       setState(() {
         _messages.add(
           ChatMessage(
-            text: _getAIResponse(userMessage),
+            text: 'Failed to connect to server: $e',
             isUser: false,
             timestamp: DateTime.now(),
           ),
         );
       });
+    }
 
-      // Scroll to bottom
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 100,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    });
+    // Scroll to bottom
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent + 100,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   String _getAIResponse(String message) {
