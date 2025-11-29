@@ -42,7 +42,20 @@ class _VisionTestScreenState extends State<VisionTestScreen>
 
   // Auto-advance timer
   Timer? _autoAdvanceTimer;
-  final int _autoAdvanceSeconds = 5; // Time to show each letter
+  final int _autoAdvanceSeconds = 8; // Time to show each letter
+
+  // Fuzzy matching map for speech variations
+  final Map<String, List<String>> _letterVariations = {
+    'C': ['c', 'see', 'sea', 'si'],
+    'D': ['d', 'dee', 'di'],
+    'E': ['e', 'ee', 'i'],
+    'F': ['f', 'ef', 'eff'],
+    'L': ['l', 'el', 'ell'],
+    'O': ['o', 'oh', 'owe', 'zero'],
+    'P': ['p', 'pee', 'pi'],
+    'T': ['t', 'tee', 'tea', 'ti'],
+    'Z': ['z', 'zee', 'zed', 'zi'],
+  };
 
   // Snellen chart data
   final List<Map<String, dynamic>> _chartRows = [
@@ -187,15 +200,21 @@ class _VisionTestScreenState extends State<VisionTestScreen>
             _lastRecognizedWords = result.recognizedWords.toUpperCase();
           });
 
-          // Check if user said the letter (only validate once)
-          if (result.finalResult &&
-              _lastRecognizedWords.isNotEmpty &&
-              !_answerValidated) {
-            _validateAnswer(_lastRecognizedWords);
+          print('📢 Speech result: "${result.recognizedWords}"');
+          print('   Final: ${result.finalResult}, Confident: ${result.hasConfidenceRating}, Confidence: ${result.confidence}');
+
+          // Validate on final result OR if we have text
+          if (!_answerValidated && _lastRecognizedWords.isNotEmpty) {
+            // Validate immediately if: final result, or we have at least one letter heard
+            bool isFinal = result.finalResult == true;
+            if (isFinal || _lastRecognizedWords.length >= 1) {
+              print('✓ Validating answer now...');
+              _validateAnswer(_lastRecognizedWords);
+            }
           }
         },
-        listenFor: const Duration(seconds: 5),
-        pauseFor: const Duration(seconds: 3),
+        listenFor: const Duration(seconds: 8),
+        pauseFor: const Duration(seconds: 2),
         partialResults: true,
         cancelOnError: true,
         listenMode: stt.ListenMode.confirmation,
@@ -208,15 +227,18 @@ class _VisionTestScreenState extends State<VisionTestScreen>
         return;
       }
 
-      // Auto-advance timer after 5 seconds
+      // Auto-advance timer after 8 seconds (matches listen duration)
       _autoAdvanceTimer?.cancel();
-      _autoAdvanceTimer = Timer(const Duration(seconds: 5), () {
+      _autoAdvanceTimer = Timer(const Duration(seconds: 8), () {
         if (!_answerValidated) {
+          print('⏰ Auto-advance timeout');
           // Record no answer if nothing spoken
           if (_lastRecognizedWords.isEmpty) {
+            print('❌ No speech detected');
             _recordResponse('', false);
           } else {
-            // Validate partial result if no final result received
+            // Validate whatever we heard
+            print('⚠️ Validating partial result: "$_lastRecognizedWords"');
             _validateAnswer(_lastRecognizedWords);
           }
         }
@@ -233,23 +255,20 @@ class _VisionTestScreenState extends State<VisionTestScreen>
     _answerValidated = true;
     _autoAdvanceTimer?.cancel(); // Cancel auto-advance timer
 
-    // Extract first letter from spoken text
-    String firstLetter = spokenText.trim().split(' ').first;
-    if (firstLetter.isEmpty) {
-      _recordResponse(spokenText, false);
-      _showFeedback('Could not understand');
+    print('🎤 Validating: "$spokenText" vs "$_currentLetter"');
+
+    // Check if answer is correct using fuzzy matching
+    bool isCorrect = _fuzzyMatchLetter(spokenText, _currentLetter);
+
+    _recordResponse(spokenText, isCorrect);
+
+    if (isCorrect) {
+      _correctAnswers++;
+      print('✅ Correct! Total: $_correctAnswers/${_testProgress + 1}');
+      _showFeedback('Correct! ✓');
     } else {
-      // Check if it matches current letter
-      bool isCorrect = firstLetter[0] == _currentLetter[0];
-
-      _recordResponse(spokenText, isCorrect);
-
-      if (isCorrect) {
-        _correctAnswers++;
-        _showFeedback('Correct! ✓');
-      } else {
-        _showFeedback('You said: $spokenText (Expected: $_currentLetter)');
-      }
+      print('❌ Wrong. Expected: $_currentLetter');
+      _showFeedback('You said: "$spokenText" (Expected: $_currentLetter)');
     }
 
     // Move to next letter after short delay
@@ -260,6 +279,34 @@ class _VisionTestScreenState extends State<VisionTestScreen>
         _completeTest();
       }
     });
+  }
+
+  /// Fuzzy matching to handle speech variations (e.g., "See" for "C")
+  bool _fuzzyMatchLetter(String spokenText, String targetLetter) {
+    final spoken = spokenText.trim().toLowerCase();
+    final target = targetLetter.toUpperCase();
+
+    // Direct match
+    if (spoken == target.toLowerCase() ||
+        spoken.startsWith(target.toLowerCase())) {
+      return true;
+    }
+
+    // Check variations map
+    if (_letterVariations.containsKey(target)) {
+      for (var variation in _letterVariations[target]!) {
+        if (spoken == variation || spoken.startsWith(variation)) {
+          return true;
+        }
+      }
+    }
+
+    // Check if first character matches
+    if (spoken.isNotEmpty && spoken[0] == target.toLowerCase()[0]) {
+      return true;
+    }
+
+    return false;
   }
 
   void _recordResponse(String spokenText, bool isCorrect) {
@@ -280,6 +327,8 @@ class _VisionTestScreenState extends State<VisionTestScreen>
       _lastRecognizedWords = '';
     });
 
+    print(
+        '📝 Moving to letter ${_testProgress + 1}/$_totalTests: $_currentLetter');
     _startVoiceRecognition();
   }
 
